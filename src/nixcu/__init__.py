@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from nixcu!")
+"""Disk usage explorer for a single Nix store closure."""

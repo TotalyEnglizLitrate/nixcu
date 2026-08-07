@@ -185,7 +185,7 @@ class DominatorTree:
                 for key in idom
             },
             children={
-                key: tuple(sorted(kids, key=lambda k: -exclusive[k]))
+                key: tuple(sorted(kids, key=lambda k: (-own_size[k], k)))
                 for key, kids in children.items()
                 if key in idom
             },
@@ -222,7 +222,12 @@ class DominatorTree:
         return ranked[:limit]
 
     def kids(self, name: str) -> tuple[DomNode, ...]:
-        """Dominator-tree children, largest first — the TUI drilldown step."""
+        """Dominator-tree children, fattest first by ``own_size``.
+
+        Ordering by own rather than exclusive size keeps the near-weightless
+        glue paths (``etc``, ``system-units``) from crowding the top, at the
+        cost of sorting a small node that dominates a large subtree low.
+        """
         key = self._key_of.get(name, name)
         return tuple(self.nodes[k] for k in self.children.get(key, ()))
 

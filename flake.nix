@@ -91,7 +91,7 @@
       );
 
       packages = forAllSystems (system: {
-        default = pythonSets.${system}.mkVirtualEnv "nixcu-env" workspace.deps.default;
+        default = pythonSets.${system}.mkVirtualEnv "nixcu" workspace.deps.default;
       });
     };
 }

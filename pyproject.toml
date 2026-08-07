@@ -5,11 +5,10 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
  "textual>=8.2.8",
- "typer>=0.27.1",
 ]
 
 [project.scripts]
-nixcu = "nixcu:main"
+nixcu = "nixcu.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.0,<0.13.0"]
