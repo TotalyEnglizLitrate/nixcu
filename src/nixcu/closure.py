@@ -118,9 +118,9 @@ class CAMethod(StrEnum):
     """Content-addressing method of a CA path."""
 
     FLAT = "flat"
-    NAR  = "nar"
+    NAR = "nar"
     TEXT = "text"
-    GIT  = "git"
+    GIT = "git"
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,9 +240,7 @@ class PathInfo:
         prefix = store_dir + "/"
         abs_path = raw["path"]
         if not abs_path.startswith(prefix):
-            raise SchemaError(
-                f"path {abs_path!r} is not under storeDir {store_dir!r}"
-            )
+            raise SchemaError(f"path {abs_path!r} is not under storeDir {store_dir!r}")
         name = abs_path[len(prefix) :]
 
         def strip(p: str) -> str:
@@ -326,7 +324,9 @@ class Closure:
         if isinstance(raw, list):
             return cls._from_lix_json(raw, report, store_dir=store_dir)
         if not isinstance(raw, dict):
-            raise SchemaError(f"expected a JSON object or array, got {type(raw).__name__}")
+            raise SchemaError(
+                f"expected a JSON object or array, got {type(raw).__name__}"
+            )
 
         if "info" in raw:
             return cls._from_format2_json(raw, report)
@@ -384,7 +384,9 @@ class Closure:
         invalid: set[str] = set()
         try:
             for abs_path, entry in entries.items():
-                name = abs_path[len(prefix) :] if abs_path.startswith(prefix) else abs_path
+                name = (
+                    abs_path[len(prefix) :] if abs_path.startswith(prefix) else abs_path
+                )
                 if entry is None:
                     invalid.add(name)
                 else:
@@ -422,7 +424,11 @@ class Closure:
 
     @classmethod
     def loads(
-        cls, data: str | bytes, report: Reporter = silent, *, store_dir: str = "/nix/store"
+        cls,
+        data: str | bytes,
+        report: Reporter = silent,
+        *,
+        store_dir: str = "/nix/store",
     ) -> Self:
         report.phase("decoding json")
         return cls.from_json(json.loads(data), report, store_dir=store_dir)

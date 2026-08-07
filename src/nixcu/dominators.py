@@ -134,9 +134,7 @@ class DominatorTree:
         if root is None:
             roots = closure.roots
             if len(roots) != 1:
-                raise ValueError(
-                    f"closure has {len(roots)} roots; pass one explicitly"
-                )
+                raise ValueError(f"closure has {len(roots)} roots; pass one explicitly")
             (root,) = roots
         if root not in closure:
             raise KeyError(root)

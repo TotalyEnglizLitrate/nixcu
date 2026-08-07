@@ -21,6 +21,7 @@ def human_size(size: int) -> str:
         value /= 1024
     raise AssertionError("unreachable")
 
+
 @final
 class ClosureTree(Tree[str]):
     """Dominator tree, populated lazily as nodes are expanded.

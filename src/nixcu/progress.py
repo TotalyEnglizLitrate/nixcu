@@ -105,6 +105,8 @@ def loading(phases: int) -> Iterator[Reporter]:
         transient=True,
     )
     with progress:
-        reporter = _BarReporter(progress, progress.add_task("starting", total=phases), phases)
+        reporter = _BarReporter(
+            progress, progress.add_task("starting", total=phases), phases
+        )
         yield reporter
         reporter.finish("done")

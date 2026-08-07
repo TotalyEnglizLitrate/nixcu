@@ -66,9 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"nixcu: {e}", file=sys.stderr)
         return 1
 
-    app = NixcuApp(
-        dom, root, inline=args.inline, elapsed=time.perf_counter() - started
-    )
+    app = NixcuApp(dom, root, inline=args.inline, elapsed=time.perf_counter() - started)
     app.run(inline=args.inline)
     return 0
 
