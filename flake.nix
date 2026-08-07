@@ -1,5 +1,5 @@
 {
-  description = "nixdu - disk usage explorer for Nix store closures";
+  description = "nixcu - disk usage explorer for Nix store closures";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -69,7 +69,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           pythonSet = pythonSets.${system}.overrideScope editableOverlay;
-          virtualenv = pythonSet.mkVirtualEnv "nixdu-dev-env" workspace.deps.all;
+          virtualenv = pythonSet.mkVirtualEnv "nixcu-dev-env" workspace.deps.all;
         in
         {
           default = pkgs.mkShell {
@@ -91,7 +91,7 @@
       );
 
       packages = forAllSystems (system: {
-        default = pythonSets.${system}.mkVirtualEnv "nixdu-env" workspace.deps.default;
+        default = pythonSets.${system}.mkVirtualEnv "nixcu-env" workspace.deps.default;
       });
     };
 }
