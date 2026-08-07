@@ -72,11 +72,8 @@ class NixcuApp(App[None]):
         ("c", "copy_path", "Copy path"),
     ]
 
-    INLINE_ROWS = 15
-    """Store paths visible inline, before header/root/footer chrome."""
-
     def __init__(
-        self, dom: DominatorTree, root_path: str, inline: bool = False
+        self, dom: DominatorTree, root_path: str, inline: int | None = 15
     ) -> None:
         super().__init__()
         self.dom = dom
@@ -93,10 +90,8 @@ class NixcuApp(App[None]):
         total = human_size(self.dom.total_size)
         self.title = "nixcu"
         self.sub_title = f"{self.root_path} — {total} over {len(self.dom)} paths"
-        if self.inline:
-            # Inline screens size to their CSS height, which defaults small.
-            # Header, root row and footer each cost a line.
-            self.screen.styles.height = self.INLINE_ROWS + 3
+        if self.inline is not None:
+            self.screen.styles.height = (self.inline or 15) + 2
 
     def action_copy_path(self) -> None:
         """Yank the selected store path to the clipboard."""

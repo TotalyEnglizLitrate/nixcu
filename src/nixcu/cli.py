@@ -24,8 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _ = parser.add_argument(
         "--inline",
-        action="store_true",
-        help="render below the prompt instead of taking over the screen",
+        nargs="?",
+        const=15,
+        type=int,
+        metavar="ROWS",
+        help="render below the prompt instead of taking over the screen, optionally specifying number of rows",
     )
     return parser
 
