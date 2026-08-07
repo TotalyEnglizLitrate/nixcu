@@ -43,8 +43,6 @@ def resolve_root(parser: argparse.ArgumentParser, closure: str | None) -> str:
                 f"no closure given and {DEFAULT_ROOT} does not exist; pass a store path explicitly"
             )
         return DEFAULT_ROOT
-    if not os.path.exists(closure):
-        parser.error(f"no such path: {closure}")
     return closure
 
 
