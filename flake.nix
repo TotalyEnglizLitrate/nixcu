@@ -83,8 +83,15 @@
       }
     );
 
-    packages = forAllSystems (system: {
-      default = pythonSets.${system}.mkVirtualEnv "nixcu" workspace.deps.default;
+    packages = forAllSystems (system: let
+      pythonSet = pythonSets.${system};
+      pkgs = nixpkgs.legacyPackages.${system};
+      inherit (pkgs.callPackages pyproject-nix.build.util {}) mkApplication;
+    in {
+      default = mkApplication {
+        venv = pythonSet.mkVirtualEnv "nixcu" workspace.deps.default;
+        package = pythonSet.nixcu;
+      };
     });
   };
 }
