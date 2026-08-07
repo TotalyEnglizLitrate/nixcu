@@ -14,8 +14,13 @@ from enum import StrEnum
 from functools import cached_property
 from typing import Self, TypedDict, cast
 
+from nixcu.progress import Reporter, silent
+
 SCHEMA_VERSION = 2
 """The ``--json-format`` we know how to read."""
+
+LOAD_PHASES = 3
+"""Phases :meth:`Closure.from_store` reports."""
 
 HASH_LEN = 32
 """Length of the base32 hash that prefixes every store path basename."""
@@ -156,7 +161,7 @@ class Closure:
     """Paths nix reported as ``null`` — queried but not valid in the store."""
 
     @classmethod
-    def from_json(cls, raw: object) -> Self:
+    def from_json(cls, raw: object, report: Reporter = silent) -> Self:
         """Build from freshly decoded JSON, narrowing it to :class:`RawClosure`."""
         if isinstance(raw, list):
             raise SchemaError(
@@ -169,12 +174,16 @@ class Closure:
 
         envelope = cast(RawClosure, raw)
         info = envelope["info"]
+        report.phase(f"reading {len(info)} store paths", len(info))
+        paths: dict[str, PathInfo] = {}
+        invalid: set[str] = set()
         try:
-            paths = {
-                name: PathInfo.from_json(name, entry)
-                for name, entry in info.items()
-                if entry is not None
-            }
+            for name, entry in info.items():
+                if entry is None:
+                    invalid.add(name)
+                else:
+                    paths[name] = PathInfo.from_json(name, entry)
+                report.advance()
         except KeyError as e:
             raise SchemaError(
                 f"entry missing field {e}; was nix run with --closure-size?"
@@ -182,12 +191,13 @@ class Closure:
         return cls(
             store_dir=envelope["storeDir"],
             paths=paths,
-            invalid=frozenset(n for n, entry in info.items() if entry is None),
+            invalid=frozenset(invalid),
         )
 
     @classmethod
-    def loads(cls, data: str | bytes) -> Self:
-        return cls.from_json(json.loads(data))
+    def loads(cls, data: str | bytes, report: Reporter = silent) -> Self:
+        report.phase("decoding json")
+        return cls.from_json(json.loads(data), report)
 
     @classmethod
     def from_store(
@@ -195,6 +205,7 @@ class Closure:
         *roots: str,
         recursive: bool = True,
         nix: str = "nix",
+        report: Reporter = silent,
     ) -> Self:
         """Shell out to ``nix path-info`` for ``roots``.
 
@@ -212,8 +223,9 @@ class Closure:
         if recursive:
             argv.append("--recursive")
         argv.extend(roots)
+        report.phase("querying nix")
         out = subprocess.run(argv, capture_output=True, check=True).stdout
-        return cls.loads(out)
+        return cls.loads(out, report)
 
     def __getitem__(self, name: str) -> PathInfo:
         return self.paths[name]

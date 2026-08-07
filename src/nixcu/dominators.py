@@ -19,8 +19,12 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from nixcu.closure import Closure
+from nixcu.progress import Reporter, silent
 
 __all__ = ["DomNode", "DominatorTree"]
+
+BUILD_PHASES = 3
+"""Phases :meth:`DominatorTree.build` reports."""
 
 
 def _strongly_connected(
@@ -116,7 +120,12 @@ class DominatorTree:
     _key_of: dict[str, str] = field(default_factory=dict, repr=False)
 
     @classmethod
-    def build(cls, closure: Closure, root: str | None = None) -> "DominatorTree":
+    def build(
+        cls,
+        closure: Closure,
+        root: str | None = None,
+        report: Reporter = silent,
+    ) -> "DominatorTree":
         """Build the tree for ``closure``, rooted at ``root``.
 
         ``root`` defaults to the closure's sole root; pass one explicitly when
@@ -138,6 +147,7 @@ class DominatorTree:
             return (d for d in closure[name].dependencies if d in live)
 
         # Condense cycles: dominance is undefined inside an SCC.
+        report.phase(f"condensing cycles in {len(live)} paths")
         components = _strongly_connected(live, deps)
         key_of: dict[str, str] = {}
         members_of: dict[str, frozenset[str]] = {}
@@ -161,6 +171,7 @@ class DominatorTree:
             for target in out:
                 preds[target].add(key)
 
+        report.phase("computing dominators")
         order = _reverse_postorder(root_key, succs)
         idom = _immediate_dominators(root_key, order, preds)
 
@@ -169,6 +180,7 @@ class DominatorTree:
             if key != root_key:
                 children[parent].append(key)
 
+        report.phase("attributing sizes")
         exclusive = _subtree_sizes(root_key, children, own_size)
 
         tree = cls(

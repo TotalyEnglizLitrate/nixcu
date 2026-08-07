@@ -4,9 +4,11 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 
-from nixcu.closure import Closure, SchemaError
-from nixcu.dominators import DominatorTree
+from nixcu.closure import LOAD_PHASES, Closure
+from nixcu.dominators import BUILD_PHASES, DominatorTree
+from nixcu.progress import loading
 from nixcu.tui import NixcuApp
 
 DEFAULT_ROOT = "/run/current-system"
@@ -51,19 +53,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = resolve_root(parser, args.closure)
 
+    started = time.perf_counter()
     try:
-        closure = Closure.from_store(root)
+        with loading(LOAD_PHASES + BUILD_PHASES) as report:
+            closure = Closure.from_store(root, report=report)
+            dom = DominatorTree.build(closure, report=report)
     except FileNotFoundError:
         print("nixcu: nix not found on PATH", file=sys.stderr)
         return 1
     except subprocess.CalledProcessError as e:
         _ = sys.stderr.write(e.stderr.decode(errors="replace"))
         return e.returncode or 1
-    except SchemaError as e:
+    except ValueError as e:
         print(f"nixcu: {e}", file=sys.stderr)
         return 1
 
-    app = NixcuApp(DominatorTree.build(closure), root, inline=args.inline)
+    app = NixcuApp(
+        dom, root, inline=args.inline, elapsed=time.perf_counter() - started
+    )
     app.run(inline=args.inline)
     return 0
 

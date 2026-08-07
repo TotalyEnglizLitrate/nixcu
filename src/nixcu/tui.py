@@ -73,12 +73,18 @@ class NixcuApp(App[None]):
     ]
 
     def __init__(
-        self, dom: DominatorTree, root_path: str, inline: int | None = 15
+        self,
+        dom: DominatorTree,
+        root_path: str,
+        inline: int | None = 15,
+        elapsed: float | None = None,
     ) -> None:
         super().__init__()
         self.dom = dom
         self.root_path = root_path
         self.inline = inline
+        self.elapsed = elapsed
+        """Seconds spent querying and analysing, for the subtitle."""
 
     @override
     def compose(self) -> ComposeResult:
@@ -89,7 +95,10 @@ class NixcuApp(App[None]):
     def on_mount(self) -> None:
         total = human_size(self.dom.total_size)
         self.title = "nixcu"
-        self.sub_title = f"{self.root_path} — {total} over {len(self.dom)} paths"
+        subtitle = f"{self.root_path} — {total} over {len(self.dom)} paths"
+        if self.elapsed is not None:
+            subtitle += f" in {self.elapsed:.1f}s"
+        self.sub_title = subtitle
         if self.inline is not None:
             self.screen.styles.height = (self.inline or 15) + 2
 
