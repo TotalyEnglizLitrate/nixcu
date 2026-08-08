@@ -44,7 +44,6 @@ Each row shows
 - The exclusive size in bold, i.e. what dropping that node would actually free.
 - The path's name
 - And, when it differs, the node's own `nar_size` in parens.
-- A `(cycle of N)` tag marks a group of paths that reference each other and were condensed into a single node, since dominance isn't well-defined inside a cycle (this happens with multi-output derivations).
 
 The TUI tree is populated lazily as you expand nodes, so opening a large closure stays fast, only the levels you actually inspect get built.
 
