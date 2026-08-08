@@ -9,12 +9,10 @@ That is the dominator tree of the reference graph, rooted at the closure root.
 A path's *exclusive size* is the total ``nar_size`` of everything it dominates
 - everything reachable only by going through it.
 
-Reference graphs contain cycles (multi-output derivations reference each
-other), and a cycle has no meaningful dominance ordering, so strongly-connected
-components are condensed to a single node first. Most components are singletons.
+The graph is taken to be acyclic, which nix guarantees.
 """
 
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -27,84 +25,21 @@ BUILD_PHASES = 3
 """Phases :meth:`DominatorTree.build` reports."""
 
 
-def _strongly_connected(
-    nodes: Iterable[str], successors: Callable[[str], Iterable[str]]
-) -> list[frozenset[str]]:
-    """Tarjan's SCC, iterative so deep reference chains cannot blow the stack."""
-    index: dict[str, int] = {}
-    low: dict[str, int] = {}
-    on_stack: set[str] = set()
-    stack: list[str] = []
-    components: list[frozenset[str]] = []
-    counter = 0
-
-    for start in nodes:
-        if start in index:
-            continue
-        index[start] = low[start] = counter
-        counter += 1
-        stack.append(start)
-        on_stack.add(start)
-        work: list[tuple[str, Iterator[str]]] = [(start, iter(successors(start)))]
-
-        while work:
-            node, pending = work[-1]
-            descended = False
-            for succ in pending:
-                if succ not in index:
-                    index[succ] = low[succ] = counter
-                    counter += 1
-                    stack.append(succ)
-                    on_stack.add(succ)
-                    work.append((succ, iter(successors(succ))))
-                    descended = True
-                    break
-                if succ in on_stack:
-                    low[node] = min(low[node], index[succ])
-            if descended:
-                continue
-
-            _ = work.pop()
-            if work:
-                parent = work[-1][0]
-                low[parent] = min(low[parent], low[node])
-            if low[node] == index[node]:
-                component: list[str] = []
-                while True:
-                    member = stack.pop()
-                    on_stack.discard(member)
-                    component.append(member)
-                    if member == node:
-                        break
-                components.append(frozenset(component))
-
-    return components
-
-
 @dataclass(frozen=True, slots=True)
 class DomNode:
-    """One node of the dominator tree.
+    """One store path, and what it accounts for."""
 
-    Usually a single store path; a set of them when they form a reference
-    cycle and are therefore inseparable.
-    """
+    name: str
+    """Basename of the store path, as in :class:`~nixcu.closure.PathInfo`."""
 
-    key: str
-    """Representative member, chosen as the largest by ``nar_size``."""
-
-    members: frozenset[str]
     own_size: int
-    """``nar_size`` summed over ``members``."""
+    """The path's own ``nar_size``."""
 
     exclusive_size: int
-    """``own_size`` plus everything this node dominates."""
+    """``own_size`` plus everything this path dominates."""
 
     parent: str | None
-    """Key of the immediate dominator; ``None`` for the root."""
-
-    @property
-    def is_cycle(self) -> bool:
-        return len(self.members) > 1
+    """Name of the immediate dominator; ``None`` for the root."""
 
 
 @dataclass
@@ -117,7 +52,6 @@ class DominatorTree:
 
     nodes: dict[str, DomNode] = field(default_factory=dict)
     children: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    _key_of: dict[str, str] = field(default_factory=dict, repr=False)
 
     @classmethod
     def build(
@@ -144,73 +78,53 @@ class DominatorTree:
         def deps(name: str) -> Iterable[str]:
             return (d for d in closure[name].dependencies if d in live)
 
-        # Condense cycles: dominance is undefined inside an SCC.
-        report.phase(f"condensing cycles in {len(live)} paths")
-        components = _strongly_connected(live, deps)
-        key_of: dict[str, str] = {}
-        members_of: dict[str, frozenset[str]] = {}
-        for component in components:
-            key = max(component, key=lambda n: (closure[n].nar_size, n))
-            members_of[key] = component
-            for member in component:
-                key_of[member] = key
-
-        root_key = key_of[root]
-        own_size = {
-            key: sum(closure[m].nar_size for m in members)
-            for key, members in members_of.items()
-        }
-
+        report.phase(f"indexing {len(live)} paths")
+        own_size = {name: closure[name].nar_size for name in live}
         succs: dict[str, frozenset[str]] = {}
-        preds: dict[str, set[str]] = {key: set() for key in members_of}
-        for key, members in members_of.items():
-            out = {key_of[d] for m in members for d in deps(m)} - {key}
-            succs[key] = frozenset(out)
+        preds: dict[str, set[str]] = {name: set() for name in live}
+        for name in live:
+            out = frozenset(deps(name))
+            succs[name] = out
             for target in out:
-                preds[target].add(key)
+                preds[target].add(name)
 
         report.phase("computing dominators")
-        order = _reverse_postorder(root_key, succs)
-        idom = _immediate_dominators(root_key, order, preds)
+        order = _reverse_postorder(root, succs)
+        _assert_acyclic(order, succs)
+        idom = _immediate_dominators(root, order, preds)
 
-        children: dict[str, list[str]] = {key: [] for key in members_of}
-        for key, parent in idom.items():
-            if key != root_key:
-                children[parent].append(key)
+        children: dict[str, list[str]] = {name: [] for name in live}
+        for name, parent in idom.items():
+            if name != root:
+                children[parent].append(name)
 
         report.phase("attributing sizes")
-        exclusive = _subtree_sizes(root_key, children, own_size)
+        exclusive = _subtree_sizes(root, children, own_size)
 
-        tree = cls(
+        return cls(
             closure=closure,
-            root=root_key,
+            root=root,
             nodes={
-                key: DomNode(
-                    key=key,
-                    members=members_of[key],
-                    own_size=own_size[key],
-                    exclusive_size=exclusive[key],
-                    parent=None if key == root_key else idom[key],
+                name: DomNode(
+                    name=name,
+                    own_size=own_size[name],
+                    exclusive_size=exclusive[name],
+                    parent=None if name == root else idom[name],
                 )
-                for key in idom
+                for name in idom
             },
             children={
-                key: tuple(sorted(kids, key=lambda k: (-own_size[k], k)))
-                for key, kids in children.items()
-                if key in idom
+                name: tuple(sorted(kids, key=lambda k: (-own_size[k], k)))
+                for name, kids in children.items()
+                if name in idom
             },
-            _key_of=key_of,
         )
-        return tree
-
-    # -- access ----------------------------------------------------------
 
     def __getitem__(self, name: str) -> DomNode:
-        """Look up by any member name, not just the representative key."""
-        return self.nodes[self._key_of.get(name, name)]
+        return self.nodes[name]
 
     def __contains__(self, name: str) -> bool:
-        return self._key_of.get(name, name) in self.nodes
+        return name in self.nodes
 
     def __len__(self) -> int:
         return len(self.nodes)
@@ -226,8 +140,8 @@ class DominatorTree:
     def biggest(self, limit: int = 20) -> list[DomNode]:
         """Nodes ranked by what dropping them would actually free."""
         ranked = sorted(
-            (n for n in self.nodes.values() if n.key != self.root),
-            key=lambda n: (-n.exclusive_size, n.key),
+            (n for n in self.nodes.values() if n.name != self.root),
+            key=lambda n: (-n.exclusive_size, n.name),
         )
         return ranked[:limit]
 
@@ -238,8 +152,7 @@ class DominatorTree:
         glue paths (``etc``, ``system-units``) from crowding the top, at the
         cost of sorting a small node that dominates a large subtree low.
         """
-        key = self._key_of.get(name, name)
-        return tuple(self.nodes[k] for k in self.children.get(key, ()))
+        return tuple(self.nodes[k] for k in self.children.get(name, ()))
 
 
 def _reverse_postorder(root: str, succs: dict[str, frozenset[str]]) -> list[str]:
@@ -259,6 +172,17 @@ def _reverse_postorder(root: str, succs: dict[str, frozenset[str]]) -> list[str]
             postorder.append(node)
     postorder.reverse()
     return postorder
+
+
+def _assert_acyclic(order: list[str], succs: dict[str, frozenset[str]]) -> None:
+    """Confirm ``order`` really is topological, which it is iff there is no cycle."""
+    rank = {name: i for i, name in enumerate(order)}
+    for name in order:
+        for succ in succs[name]:
+            if rank[succ] <= rank[name]:
+                raise ValueError(
+                    f"reference cycle through {name!r} -> {succ!r}; nix should never emit one, so this closure is malformed"
+                )
 
 
 def _immediate_dominators(

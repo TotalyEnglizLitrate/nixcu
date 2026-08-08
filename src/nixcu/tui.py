@@ -38,12 +38,10 @@ class ClosureTree(Tree[str]):
         self.guide_depth = 3
 
     def _label(self, node: DomNode) -> str:
-        info = self.dom.closure[node.key]
+        info = self.dom.closure[node.name]
         parts = [f"[b]{human_size(node.exclusive_size)}[/b]", info.pname]
         if node.own_size != node.exclusive_size:
             parts.append(f"[dim](own {human_size(node.own_size)})[/dim]")
-        if node.is_cycle:
-            parts.append(f"[yellow](cycle of {len(node.members)})[/yellow]")
         return "  ".join(parts)
 
     @override
@@ -59,8 +57,8 @@ class ClosureTree(Tree[str]):
         for child in self.dom.kids(node.data):
             _ = node.add(
                 self._label(child),
-                data=child.key,
-                allow_expand=bool(self.dom.children.get(child.key)),
+                data=child.name,
+                allow_expand=bool(self.dom.children.get(child.name)),
             )
 
 
